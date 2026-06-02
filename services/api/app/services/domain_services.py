@@ -16,7 +16,7 @@ from app.repositories.domain import (
     WorkflowRepository,
 )
 from app.repositories.user_org import OrganizationRepository, UserRepository
-from app.schemas.auth import UserRead
+from app.schemas.auth import UserRead, UserUpdate
 from app.schemas.domain import (
     ChatCreate,
     ChatRead,
@@ -25,12 +25,13 @@ from app.schemas.domain import (
     WorkflowCreate,
     WorkflowRead,
 )
-from app.schemas.organization import OrganizationRead
-
+from app.schemas.organization import OrganizationRead, OrganizationUpdate
+from app.core.security import hash_password
 
 # ══════════════════════════════════════════════════════════
 # USER SERVICE
 # ══════════════════════════════════════════════════════════
+
 
 class UserService:
 
@@ -57,6 +58,18 @@ class UserService:
             raise_not_found("User", user_id)
         return UserRead.model_validate(user)
 
+    async def update_user(self, user_id: str, user_data: UserUpdate) -> UserRead:
+        user = await self.repo.get_by_id(user_id)
+        if not user:
+            raise_not_found("User", user_id)
+        # Update user fields
+        updated_data = user_data.model_dump(exclude_unset=True)
+        if "full_name" in updated_data:
+            user.full_name = updated_data["full_name"]
+        if "password" in updated_data:
+            user.hashed_password = hash_password(updated_data["password"])
+        updated_user = await self.repo.update(user)
+        return UserRead.model_validate(updated_user)
 
 # ══════════════════════════════════════════════════════════
 # ORGANIZATION SERVICE
@@ -72,6 +85,19 @@ class OrganizationService:
         if not org:
             raise_not_found("Organization", org_id)
         return OrganizationRead.model_validate(org)
+    
+    async def update_my_org(self, org_id: str, org_data: OrganizationUpdate) -> OrganizationRead:
+        org = await self.repo.get_active_by_id(org_id)
+        if not org:
+            raise_not_found("Organization", org_id)
+        # Update org fields
+        updated_data = org_data.model_dump(exclude_unset=True)
+        if "name" in updated_data:
+            org.name = updated_data["name"]
+        if "slug" in updated_data:
+            org.slug = updated_data["slug"]
+        updated_org = await self.repo.update(org)
+        return OrganizationRead.model_validate(updated_org)
 
 
 # ══════════════════════════════════════════════════════════

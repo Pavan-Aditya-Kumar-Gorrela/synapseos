@@ -1,8 +1,13 @@
+"use client";
+
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Cpu, FileText, Bot, GitBranch, BarChart3, FileSpreadsheet, Settings, Menu, X, Terminal } from 'lucide-react';
 import Logo from '../Logo';
+import {useRouter} from 'next/navigation';
+
+
 
 const menuItems = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -17,6 +22,7 @@ const menuItems = [
 
 export const Sidebar = ({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (v: boolean) => void }) => {
   const pathname = usePathname();
+  const router = useRouter();
 
   return (
     <>
@@ -46,6 +52,18 @@ export const Sidebar = ({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (v:
             })}
           </nav>
         </div>
+
+        {/*Logout Section */}
+      <div className="border border-red-500/20 rounded-xl m-4 p-1 bg-red-500/5 w-3/4">
+          <button className="flex items-center gap-3 h-10 px-3 rounded-lg text-sm font-medium text-[#94A3B8] hover:text-[#dee1f9] hover:bg-white/[0.02] transition-all duration-150 w-full"
+            onClick={()=>{
+              router.push('/login');
+            }}
+          >
+            <Terminal className="w-4 h-4 text-red-400 group-hover:text-[#dee1f9]" />
+            <span className='text-red-400'>Log out</span>
+          </button>
+        </div>   
 
         {/* System Node Connection Bottom Utility */}
         <div className="p-4 border-t border-white/[0.04] bg-[#080d1d]/40">

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.roles import UserRole
 from app.auth.dependencies import CurrentUser, get_current_user, require_roles
-from app.schemas.auth import UserRead
+from app.schemas.auth import UserRead, UserUpdate
 from app.services.domain_services import UserService
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -28,7 +28,7 @@ async def get_me(
     "",
     response_model=list[UserRead],
     summary="List all users in my organization",
-    dependencies=[Depends(require_roles(UserRole.MANAGER))],  # Managers and above
+    dependencies=[Depends(require_roles(UserRole.ADMIN,UserRole.MANAGER))],  # Managers and above
 )
 async def list_users(
     current_user: CurrentUser = Depends(get_current_user),
@@ -50,3 +50,13 @@ async def get_user(
     """Get a user by ID. User must be in the same organization."""
     service = UserService(db)
     return await service.get_user(user_id, current_user.org_id)
+
+@router.patch("/me", response_model=UserRead, summary="Update my profile")
+async def update_me(
+    user_data: UserUpdate,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserRead:
+    """Update the profile of the currently authenticated user."""
+    service = UserService(db)
+    return await service.update_user(current_user.user_id, user_data)

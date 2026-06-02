@@ -1,0 +1,219 @@
+const BASE_URL = process.env.API_URL || "http://127.0.0.1:8000/api/v1";
+
+// ─── Generic HTTP Client ───────────────────────────────────
+
+type RequestOptions = {
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  body?: unknown;
+  token?: string;
+};
+
+async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+  const { method = 'GET', body, token } = options;
+
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  const res = await fetch(`${BASE_URL}${endpoint}`, {
+    method,
+    headers,
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new Error(error.detail ?? `HTTP ${res.status}`);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+// ══════════════════════════════════════════════════════════
+// TYPES  (mirrors backend schemas)
+// ══════════════════════════════════════════════════════════
+
+export interface UserRead {
+  id: string;
+  full_name: string;
+  email: string;
+  organization_id: string;
+  role: string;
+  created_at: string;
+}
+
+export interface UserUpdate {
+  full_name?: string;
+  password?: string;
+}
+
+export interface OrganizationRead {
+  id: string;
+  name: string;
+  slug: string;
+  industry?: string;
+  plan: string;
+  created_at: string;
+}
+
+export interface OrganizationUpdate {
+  name?: string;
+  slug?: string;
+  industry?: string;
+}
+
+export interface DocumentRead {
+  id: string;
+  filename: string;
+  file_type: string;
+  storage_path: string;
+  status: 'pending' | 'processing' | 'ready' | 'failed';
+  uploaded_by: string;
+  created_at: string;
+}
+
+export interface DocumentCreate {
+  filename: string;
+  file_type: string;
+  storage_path: string;
+}
+
+export interface ChatRead {
+  id: string;
+  title: string;
+  organization_id: string;
+  user_id: string;
+  created_at: string;
+}
+
+export interface ChatCreate {
+  title: string;
+}
+
+export interface WorkflowRead {
+  id: string;
+  name: string;
+  status: 'draft' | 'active' | 'archived';
+  organization_id: string;
+  created_at: string;
+}
+
+export interface WorkflowCreate {
+  name: string;
+}
+
+// ══════════════════════════════════════════════════════════
+// USER SERVICE — /users
+// ══════════════════════════════════════════════════════════
+
+export const UserService = {
+  /**
+   * GET /users/me
+   * Returns the currently authenticated user's profile.
+   */
+  
+  getMe: (token: string) =>
+    request<UserRead>('/users/me', { token }),
+
+  /**
+   * PATCH /users/me
+   * Updates the current user's profile (name, password).
+   */
+  updateMe: (data: UserUpdate, token: string) =>
+    request<UserRead>('/users/me', { method: 'PATCH', body: data, token }),
+
+  /**
+   * GET /users
+   * Lists all users in the current org (admin only).
+   */
+  listUsers: (token: string, skip = 0, limit = 100) =>
+    request<UserRead[]>(`/users?skip=${skip}&limit=${limit}`, { token }),
+
+  /**
+   * GET /users/:id
+   * Gets a specific user within the same org.
+   */
+  getUser: (userId: string, token: string) =>
+    request<UserRead>(`/users/${userId}`, { token }),
+};
+
+// ══════════════════════════════════════════════════════════
+// ORGANIZATION SERVICE — /organizations
+// ══════════════════════════════════════════════════════════
+
+export const OrganizationService = {
+  /**
+   * GET /organizations/me
+   * Returns the current user's organization.
+   */
+  getMyOrg: (token: string) =>
+    request<OrganizationRead>('/organizations/me', { token }),
+
+  /**
+   * PATCH /organizations/me
+   * Updates the organization's profile (name, slug, industry).
+   */
+  updateMyOrg: (data: OrganizationUpdate, token: string) =>
+    request<OrganizationRead>('/organizations/me', { method: 'PATCH', body: data, token }),
+};
+
+// ══════════════════════════════════════════════════════════
+// DOCUMENT SERVICE — /documents
+// ══════════════════════════════════════════════════════════
+
+export const DocumentService = {
+  /**
+   * POST /documents
+   * Registers document metadata after upload to S3.
+   */
+  uploadDocument: (data: DocumentCreate, token: string) =>
+    request<DocumentRead>('/documents', { method: 'POST', body: data, token }),
+
+  /**
+   * GET /documents
+   * Lists all documents belonging to the current org.
+   */
+  listDocuments: (token: string, skip = 0, limit = 100) =>
+    request<DocumentRead[]>(`/documents?skip=${skip}&limit=${limit}`, { token }),
+};
+
+// ══════════════════════════════════════════════════════════
+// CHAT SERVICE — /chats
+// ══════════════════════════════════════════════════════════
+
+export const ChatService = {
+  /**
+   * POST /chats
+   * Creates a new chat session.
+   */
+  createChat: (data: ChatCreate, token: string) =>
+    request<ChatRead>('/chats', { method: 'POST', body: data, token }),
+
+  /**
+   * GET /chats
+   * Lists all chats for the current user in the org.
+   */
+  listChats: (token: string) =>
+    request<ChatRead[]>('/chats', { token }),
+};
+
+// ══════════════════════════════════════════════════════════
+// WORKFLOW SERVICE — /workflows
+// ══════════════════════════════════════════════════════════
+
+export const WorkflowService = {
+  /**
+   * POST /workflows
+   * Creates a new workflow (starts as draft).
+   */
+  createWorkflow: (data: WorkflowCreate, token: string) =>
+    request<WorkflowRead>('/workflows', { method: 'POST', body: data, token }),
+
+  /**
+   * GET /workflows
+   * Lists all workflows for the current org.
+   */
+  listWorkflows: (token: string) =>
+    request<WorkflowRead[]>('/workflows', { token }),
+};

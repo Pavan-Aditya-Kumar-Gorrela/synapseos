@@ -44,3 +44,16 @@ class OrganizationRead(BaseModel):
     # `model_config = {"from_attributes": True}` is the Pydantic v2 way to say
     # "I can be constructed from a SQLAlchemy ORM object, not just a dict."
     model_config = {"from_attributes": True}
+
+class OrganizationUpdate(BaseModel):
+    """Schema for updating organization details. All fields optional."""
+    name: str | None = Field(None, min_length=2, max_length=255)
+    slug: str | None = Field(None, min_length=2, max_length=100)
+
+    @field_validator("slug")
+    @classmethod
+    def slug_must_be_url_safe(cls, v: str) -> str:
+        """Slugs must contain only lowercase letters, numbers, and hyphens."""
+        if v is not None and not re.match(r"^[a-z0-9-]+$", v):
+            raise ValueError("Slug must contain only lowercase letters, numbers, and hyphens.")
+        return v

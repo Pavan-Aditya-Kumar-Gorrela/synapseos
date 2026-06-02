@@ -39,6 +39,12 @@ class UserCreate(BaseModel):
     password: str = Field(..., min_length=8)
     role: UserRole = UserRole.VIEWER
 
+class UserUpdate(BaseModel):
+    """Schema for updating user profile. All fields optional."""
+    full_name: str | None = Field(None, min_length=2, max_length=255)
+    password: str | None = Field(None, min_length=8)
+    
+
 
 # ══════════════════════════════════════════════════════════
 # AUTH SCHEMAS

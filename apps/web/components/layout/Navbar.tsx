@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Bell, Search, ChevronDown, Command, Layers } from 'lucide-react';
 
 export const Navbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
-
+  const router = useRouter();
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
@@ -66,8 +67,10 @@ export const Navbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
         {/* Operator User Profile Block */}
         <div className="flex items-center gap-2.5 pl-2 border-l border-white/[0.08]">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#571bc1] to-[#4d8eff] p-0.5">
-            <div className="w-full h-full rounded-[6px] bg-[#080d1d] flex items-center justify-center text-[11px] font-mono font-bold text-[#adc6ff]">
-              AX
+            <div className="w-full h-full rounded-[6px] bg-[#080d1d] flex items-center justify-center text-[11px] font-mono font-bold text-[#adc6ff]"
+              
+            >
+              <span>AX</span>
             </div>
           </div>
         </div>
