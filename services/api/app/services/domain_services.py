@@ -6,11 +6,14 @@
 #   Services use repositories for DB and raise domain exceptions.
 #   Routes convert domain exceptions into HTTP responses.
 
+from email import message
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import raise_not_found, raise_forbidden
-from app.models.domain import Chat, Document, Workflow
+from app.models.domain import Chat, ChatMessage, Document, Workflow
 from app.repositories.domain import (
+    ChatMessageRepository,
     ChatRepository,
     DocumentRepository,
     WorkflowRepository,
@@ -20,6 +23,8 @@ from app.schemas.auth import UserRead, UserUpdate
 from app.schemas.domain import (
     ChatCreate,
     ChatRead,
+    ChatMessageRead,
+    ChatMessageCreate,
     DocumentCreate,
     DocumentRead,
     WorkflowCreate,
@@ -158,6 +163,37 @@ class ChatService:
     async def list_chats(self, org_id: str, user_id: str) -> list[ChatRead]:
         chats = await self.repo.get_all_by_org_and_user(org_id, user_id)
         return [ChatRead.model_validate(c) for c in chats]
+    
+    async def get_chat(self, org_id: str, user_id: str, chat_id: str) -> ChatRead:
+        chat = await self.repo.get_by_id(chat_id)
+        if not chat or chat.organization_id != org_id or chat.user_id != user_id:
+            raise_not_found("Chat", chat_id)
+        return ChatRead.model_validate(chat)
+    
+
+class ChatMessageService:
+
+    def __init__(self, db: AsyncSession):
+        self.repo = ChatMessageRepository(db)
+        self.repo2 = ChatRepository(db)
+
+    async def send_message(self, org_id: str, user_id: str, chat_id: str, message_data: ChatMessageCreate) -> ChatMessageRead:
+        chat = await self.repo2.get_by_id(chat_id)
+        if not chat or chat.organization_id != org_id or chat.user_id != user_id:
+            raise_not_found("Chat", chat_id)
+        message = ChatMessage(
+            chat_id=chat_id,
+            role=message_data.role,
+            content=message_data.content,
+        )
+        message = await self.repo.add_message(message)
+        return ChatMessageRead.model_validate(message)
+    async def list_messages(self, org_id: str, user_id: str, chat_id: str) -> list[ChatMessageRead]:
+        chat = await self.repo2.get_by_id(chat_id)
+        if not chat or chat.organization_id != org_id or chat.user_id != user_id:
+            raise_not_found("Chat", chat_id)
+        messages = await self.repo.get_messages_by_chat_id(chat_id)
+        return [ChatMessageRead.model_validate(m) for m in messages]
 
 
 # ══════════════════════════════════════════════════════════

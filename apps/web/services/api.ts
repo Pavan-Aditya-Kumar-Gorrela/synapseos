@@ -81,15 +81,29 @@ export interface DocumentCreate {
 
 export interface ChatRead {
   id: string;
-  title: string;
   organization_id: string;
   user_id: string;
+  title: string;
   created_at: string;
 }
 
 export interface ChatCreate {
   title: string;
 }
+
+export interface ChatMessageRead {
+  id: string;
+  chat_id: string;
+  role: string;
+  content: string;
+  created_at: string;
+}
+
+export interface ChatMessageCreate {
+  role: string;
+  content: string;
+}
+
 
 export interface WorkflowRead {
   id: string;
@@ -183,20 +197,27 @@ export const DocumentService = {
 // ══════════════════════════════════════════════════════════
 
 export const ChatService = {
-  /**
-   * POST /chats
-   * Creates a new chat session.
-   */
+  /** POST /chats — Creates a new chat session. */
   createChat: (data: ChatCreate, token: string) =>
     request<ChatRead>('/chats', { method: 'POST', body: data, token }),
-
-  /**
-   * GET /chats
-   * Lists all chats for the current user in the org.
-   */
+ 
+  /** GET /chats — Lists all chats for the current user in the org. */
   listChats: (token: string) =>
     request<ChatRead[]>('/chats', { token }),
+ 
+  /** GET /chats/:id — Gets a specific chat. */
+  getChat: (chatId: string, token: string) =>
+    request<ChatRead>(`/chats/${chatId}`, { token }),
+ 
+  /** GET /chats/:id/messages — Lists all messages in a chat. */
+  listMessages: (chatId: string, token: string) =>
+    request<ChatMessageRead[]>(`/chats/${chatId}/messages`, { token }),
+ 
+  /** POST /chats/:id/messages — Sends a message in a chat. */
+  sendMessage: (chatId: string, data: ChatMessageCreate, token: string) =>
+    request<ChatMessageRead>(`/chats/${chatId}/messages`, { method: 'POST', body: data, token }),
 };
+
 
 // ══════════════════════════════════════════════════════════
 // WORKFLOW SERVICE — /workflows

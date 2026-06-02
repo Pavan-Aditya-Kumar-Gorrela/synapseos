@@ -63,7 +63,7 @@ export default function AuthenticationWorkspace() {
   const [trustTerminal, setTrustTerminal] = useState(false);
   const [formState, setFormState] = useState<FormState>('idle');
   const [errorMsg, setErrorMsg] = useState('');
-  const setUser = useAuthStore((state) => state.setUser);
+  const { setUser, setToken } = useAuthStore();
 
   const isLoading = formState === 'loading';
   const isSuccess = formState === 'success';
@@ -78,6 +78,7 @@ export default function AuthenticationWorkspace() {
       console.log(useAuthStore.getState()); // Debug: log auth store state before updating
       persistTokens(data);
       setUser(data.user); 
+      setToken(data.access_token);
        // Set the user profile in the auth store
 
       // Optional: extend trust via a longer-lived cookie flag sent to your backend

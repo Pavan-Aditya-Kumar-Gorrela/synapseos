@@ -55,6 +55,18 @@ class ChatMessageRepository(BaseRepository[ChatMessage]):
             .order_by(ChatMessage.created_at.asc())
         )
         return list(result.scalars().all())
+    async def add_message(self, message: ChatMessage) -> ChatMessage:
+        self.db.add(message)
+        await self.db.commit()
+        await self.db.refresh(message)
+        return message
+    async def get_messages_by_chat_id(self, chat_id: str) -> list[ChatMessage]:
+        result = await self.db.execute(
+            select(ChatMessage)
+            .where(ChatMessage.chat_id == chat_id)
+            .order_by(ChatMessage.created_at.asc())
+        )
+        return list(result.scalars().all())
 
 
 class WorkflowRepository(BaseRepository[Workflow]):

@@ -46,6 +46,10 @@ class ChatMessageRead(BaseModel):
 
     model_config = {"from_attributes": True}
 
+class ChatMessageCreate(BaseModel):
+    role: str = Field(..., pattern="^(user|assistant|system)$")
+    content: str = Field(..., min_length=1)
+
 
 class ChatRead(BaseModel):
     id: str
@@ -61,9 +65,6 @@ class ChatCreate(BaseModel):
     title: str = Field(default="New Chat", max_length=500)
 
 
-class SendMessageRequest(BaseModel):
-    """Body for sending a message inside a chat."""
-    content: str = Field(..., min_length=1)
 
 
 # ══════════════════════════════════════════════════════════
