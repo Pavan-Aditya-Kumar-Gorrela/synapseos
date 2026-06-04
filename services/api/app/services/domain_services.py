@@ -7,17 +7,18 @@
 #   Routes convert domain exceptions into HTTP responses.
 
 from email import message
-
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import raise_not_found, raise_forbidden
-from app.models.domain import Chat, ChatMessage, Document, Workflow
+from app.models.domain import Chat, ChatMessage, Document, Workflow, DocumentStatus
 from app.repositories.domain import (
     ChatMessageRepository,
     ChatRepository,
     DocumentRepository,
     WorkflowRepository,
 )
+from fastapi import UploadFile
 from app.repositories.user_org import OrganizationRepository, UserRepository
 from app.schemas.auth import UserRead, UserUpdate
 from app.schemas.domain import (
@@ -27,11 +28,16 @@ from app.schemas.domain import (
     ChatMessageCreate,
     DocumentCreate,
     DocumentRead,
+    DocumentListItem,
     WorkflowCreate,
     WorkflowRead,
 )
+from app.services.storage_service import StorageService
+from app.services.document_processor import DocumentProcessor
 from app.schemas.organization import OrganizationRead, OrganizationUpdate
 from app.core.security import hash_password
+
+logger = logging.getLogger(__name__)
 
 # ══════════════════════════════════════════════════════════
 # USER SERVICE
@@ -109,37 +115,106 @@ class OrganizationService:
 # DOCUMENT SERVICE
 # ══════════════════════════════════════════════════════════
 
+ALLOWED_MIME_TYPES = {
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/msword",
+    "text/plain",
+    "text/csv",
+    "application/csv",
+}
+
+MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024   # 50 MB
+
 class DocumentService:
 
     def __init__(self, db: AsyncSession):
         self.repo = DocumentRepository(db)
 
-    async def upload_document(
+    async def ingest_upload(
         self,
         org_id: str,
         user_id: str,
-        data: DocumentCreate,
+        file: UploadFile,
     ) -> DocumentRead:
         """
-        Registers document metadata after a file has been uploaded to storage.
-        In production, actual file upload happens BEFORE this:
-          1. Client uploads file to presigned S3 URL
-          2. Client calls this endpoint with the storage_path
+        Full upload pipeline:
+          1. Validate type + size
+          2. Save file to disk
+          3. Create DB record (UPLOADING)
+          4. Extract text → READY  |  on failure → FAILED
         """
+        # ── 1. Validate ───────────────────────────────────────────
+        content_type = file.content_type or ""
+        if content_type not in ALLOWED_MIME_TYPES:
+            from app.core.exceptions import raise_bad_request
+            raise_bad_request(
+                f"Unsupported file type '{content_type}'. "
+                f"Allowed: PDF, DOCX, TXT, CSV."
+            )
+
+        # Size check — read into memory only to measure, then rewind
+        file.file.seek(0, 2)                  # seek to end
+        file_size = file.file.tell()
+        file.file.seek(0)                     # rewind
+
+        if file_size > MAX_FILE_SIZE_BYTES:
+            from app.core.exceptions import raise_bad_request
+            raise_bad_request(
+                f"File too large ({file_size // (1024*1024)} MB). Max 50 MB."
+            )
+
+        # ── 2. Save file ──────────────────────────────────────────
+        unique_filename, storage_path, saved_size = StorageService.save_file(file, org_id)
+
+        # ── 3. Create DB record ───────────────────────────────────
         doc = Document(
             organization_id=org_id,
             uploaded_by=user_id,
-            filename=data.filename,
-            file_type=data.file_type,
-            storage_path=data.storage_path,
-            status="pending",  # Will become "processing" → "ready" via Celery
+            filename=unique_filename,
+            original_filename=file.filename or unique_filename,
+            file_type=content_type,
+            file_size=saved_size,
+            storage_path=storage_path,
+            status=DocumentStatus.PROCESSING,
         )
         doc = await self.repo.create(doc)
+
+        # ── 4. Extract text ───────────────────────────────────────
+        try:
+            extracted = DocumentProcessor.extract_text(storage_path, content_type)
+            doc.extracted_text = extracted
+            doc.status = DocumentStatus.READY
+        except Exception as exc:
+            logger.error("Text extraction failed for doc %s: %s", doc.id, exc)
+            doc.status = DocumentStatus.FAILED
+
+        doc = await self.repo.update(doc)
         return DocumentRead.model_validate(doc)
 
-    async def list_documents(self, org_id: str, skip: int = 0, limit: int = 100) -> list[DocumentRead]:
-        docs = await self.repo.get_all_by_org(org_id, skip=skip, limit=limit)
-        return [DocumentRead.model_validate(d) for d in docs]
+    async def list_documents(
+        self,
+        org_id: str,
+        skip: int = 0,
+        limit: int = 50,
+        search: str | None = None,
+    ) -> list[DocumentListItem]:
+        docs = await self.repo.get_all_by_org(org_id, skip=skip, limit=limit, search=search)
+        return [DocumentListItem.model_validate(d) for d in docs]
+
+    async def get_document(self, org_id: str, doc_id: str) -> DocumentRead:
+        doc = await self.repo.get_by_id_and_org(doc_id, org_id)
+        if not doc:
+            raise_not_found("Document", doc_id)
+        return DocumentRead.model_validate(doc)
+
+    async def delete_document(self, org_id: str, doc_id: str) -> None:
+        doc = await self.repo.get_by_id_and_org(doc_id, org_id)
+        if not doc:
+            raise_not_found("Document", doc_id)
+        StorageService.delete_file(doc.storage_path)
+        await self.repo.delete_by_id_and_org(doc_id, org_id)
+
 
 
 # ══════════════════════════════════════════════════════════

@@ -11,17 +11,40 @@ from app.repositories.base import BaseRepository
 
 
 class DocumentRepository(BaseRepository[Document]):
+
     def __init__(self, db: AsyncSession):
         super().__init__(Document, db)
 
-    async def get_all_by_org(self, org_id: str, *, skip: int = 0, limit: int = 100) -> list[Document]:
-        result = await self.db.execute(
-            select(Document)
-            .where(Document.organization_id == org_id)
-            .order_by(Document.created_at.desc())
-            .offset(skip).limit(limit)
-        )
+    async def get_all_by_org(
+        self,
+        org_id: str,
+        *,
+        skip: int = 0,
+        limit: int = 100,
+        search: Optional[str] = None,
+    ) -> list[Document]:
+        q = select(Document).where(Document.organization_id == org_id)
+        if search:
+            q = q.where(Document.original_filename.ilike(f"%{search}%"))
+        q = q.order_by(Document.created_at.desc()).offset(skip).limit(limit)
+        result = await self.db.execute(q)
         return list(result.scalars().all())
+
+    async def get_by_id_and_org(self, doc_id: str, org_id: str) -> Optional[Document]:
+        result = await self.db.execute(
+            select(Document).where(
+                Document.id == doc_id,
+                Document.organization_id == org_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def delete_by_id_and_org(self, doc_id: str, org_id: str) -> Optional[Document]:
+        doc = await self.get_by_id_and_org(doc_id, org_id)
+        if doc:
+            await self.db.delete(doc)
+            await self.db.commit()
+        return doc
 
 
 class ChatRepository(BaseRepository[Chat]):

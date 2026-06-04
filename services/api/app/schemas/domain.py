@@ -9,28 +9,46 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
-# ══════════════════════════════════════════════════════════
-# DOCUMENT SCHEMAS
-# ══════════════════════════════════════════════════════════
-
 class DocumentRead(BaseModel):
-    id: str
-    organization_id: str
-    uploaded_by: Optional[str]
-    filename: str
-    file_type: str
-    storage_path: str
-    status: str
-    created_at: datetime
+    id:                str
+    organization_id:   str
+    uploaded_by:       Optional[str]
+    filename:          str
+    original_filename: str
+    file_type:         str
+    file_size:         int
+    storage_path:      str
+    extracted_text:    Optional[str]
+    status:            str
+    created_at:        datetime
+    updated_at:        datetime
 
     model_config = {"from_attributes": True}
 
 
+class DocumentListItem(BaseModel):
+    """Lighter schema for list endpoints — omits extracted_text."""
+    id:                str
+    organization_id:   str
+    uploaded_by:       Optional[str]
+    filename:          str
+    original_filename: str
+    file_type:         str
+    file_size:         int
+    status:            str
+    created_at:        datetime
+    updated_at:        datetime
+
+    model_config = {"from_attributes": True}
+
+
+# DocumentCreate is now internal-only (service constructs it, not clients)
 class DocumentCreate(BaseModel):
-    """Used internally by DocumentService after a file upload."""
-    filename: str
-    file_type: str
-    storage_path: str
+    filename:          str
+    original_filename: str
+    file_type:         str
+    file_size:         int
+    storage_path:      str
 
 
 # ══════════════════════════════════════════════════════════

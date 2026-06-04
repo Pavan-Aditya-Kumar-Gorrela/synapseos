@@ -63,19 +63,21 @@ export interface OrganizationUpdate {
   industry?: string;
 }
 
-export interface DocumentRead {
+export interface DocumentListItem {
   id: string;
+  organization_id: string;
+  uploaded_by: string | null;
   filename: string;
+  original_filename: string;
   file_type: string;
-  storage_path: string;
-  status: 'pending' | 'processing' | 'ready' | 'failed';
-  uploaded_by: string;
+  file_size: number;
+  status: 'uploading' | 'processing' | 'ready' | 'failed';
   created_at: string;
+  updated_at: string;
 }
 
-export interface DocumentCreate {
-  filename: string;
-  file_type: string;
+export interface DocumentRead extends DocumentListItem {
+  extracted_text: string | null;
   storage_path: string;
 }
 
@@ -178,18 +180,44 @@ export const OrganizationService = {
 
 export const DocumentService = {
   /**
-   * POST /documents
-   * Registers document metadata after upload to S3.
+   * POST /documents/upload
+   * Sends multipart/form-data. Returns full DocumentRead.
    */
-  uploadDocument: (data: DocumentCreate, token: string) =>
-    request<DocumentRead>('/documents', { method: 'POST', body: data, token }),
+  upload: async (file: File, token: string): Promise<DocumentRead> => {
+    const form = new FormData();
+    form.append('file', file);
 
-  /**
-   * GET /documents
-   * Lists all documents belonging to the current org.
-   */
-  listDocuments: (token: string, skip = 0, limit = 100) =>
-    request<DocumentRead[]>(`/documents?skip=${skip}&limit=${limit}`, { token }),
+    const res = await fetch(`${BASE_URL}/documents/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      // Do NOT set Content-Type — browser sets it with the boundary
+      body: form,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Upload failed' }));
+      throw new Error(err.detail ?? `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
+  /** GET /documents?skip=&limit=&search= */
+  list: (token: string, skip = 0, limit = 50, search?: string): Promise<DocumentListItem[]> => {
+    const params = new URLSearchParams({
+      skip: String(skip),
+      limit: String(limit),
+      ...(search ? { search } : {}),
+    });
+    return request<DocumentListItem[]>(`/documents?${params}`, { token });
+  },
+
+  /** GET /documents/:id */
+  get: (id: string, token: string): Promise<DocumentRead> =>
+    request<DocumentRead>(`/documents/${id}`, { token }),
+
+  /** DELETE /documents/:id */
+  delete: (id: string, token: string): Promise<void> =>
+    request<void>(`/documents/${id}`, { method: 'DELETE', token }),
 };
 
 // ══════════════════════════════════════════════════════════
